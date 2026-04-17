@@ -179,6 +179,195 @@ function Append-FileWithBackup {
     Write-Host "[APPEND] $Path"
 }
 
+function Initialize-ProjectDocuments {
+    param(
+        [string]$RepoRoot,
+        [System.Collections.Generic.List[string]]$InstalledTargets
+    )
+
+    $docItems = @(
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "MISSION.md"
+            Content = @'
+# Mission
+
+## 项目目标
+- 用一句话说明这个项目要解决什么问题。
+
+## 交付范围
+- 当前要交付的核心能力：
+- 明确不包含的内容：
+
+## 成功标准
+- 功能完成的判断标准：
+- 验证方式：
+
+## 当前阶段
+- 当前阶段：
+- 当前优先级：
+- 当前主要风险：
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "plans\active\current.md"
+            Content = @'
+# Current Plan
+
+## Objective
+- 当前正在完成的目标：
+
+## Known Facts
+- 已确认事实：
+
+## Unknowns / Blockers
+- 未知项：
+- 阻塞项：
+
+## Next Small Step
+- 下一步最小动作：
+
+## Validation
+- 计划采用的验证方式：
+
+## Progress Log
+- YYYY-MM-DD HH:mm: 初始化计划文档。
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "docs\README.md"
+            Content = @'
+# Docs README
+
+本文档目录用于沉淀当前项目的长期有效信息，避免关键信息只存在于临时对话中。
+
+## 建议阅读顺序
+1. `MISSION.md`
+2. `AGENTS.md`
+3. `plans/active/current.md`
+4. `docs/constraints.md`
+5. `docs/system_map.md`
+6. `docs/runbook.md`
+
+## 文档职责
+- `constraints.md`：项目约束、边界、兼容性要求、禁止事项。
+- `system_map.md`：模块结构、目录职责、关键依赖与主要数据流。
+- `runbook.md`：常用操作、验证方式、排障步骤、发布或回滚要点。
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "docs\constraints.md"
+            Content = @'
+# Constraints
+
+## 技术约束
+- 运行环境：
+- 语言 / 版本：
+- 依赖限制：
+
+## 业务约束
+- 业务边界：
+- 合规或审计要求：
+
+## 工程约束
+- 不允许的改动类型：
+- 必须保留的兼容性：
+- 性能 / 安全 / 稳定性要求：
+
+## 交付约束
+- 时间约束：
+- 验收约束：
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "docs\system_map.md"
+            Content = @'
+# System Map
+
+## 顶层结构
+- 入口：
+- 核心模块：
+- 配置文件：
+- 测试位置：
+
+## 目录职责
+- `{{PATH_1}}`：
+- `{{PATH_2}}`：
+- `{{PATH_3}}`：
+
+## 关键流程
+1. 输入从哪里进入：
+2. 核心处理在哪里发生：
+3. 输出写到哪里：
+
+## 风险热点
+- 易出错模块：
+- 高耦合区域：
+- 需要谨慎修改的路径：
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "docs\runbook.md"
+            Content = @'
+# Runbook
+
+## 常用命令
+- 安装：
+- 开发：
+- 测试：
+- 构建：
+
+## 最小验证清单
+- 修改后先执行：
+- 必看输出：
+- 成功判定：
+
+## 常见问题排查
+- 问题现象：
+- 排查步骤：
+- 解决方式：
+
+## 变更注意事项
+- 高风险操作：
+- 回滚方式：
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "reports\run_log.md"
+            Content = @'
+# Run Log
+
+- YYYY-MM-DD HH:mm: 初始化项目运行日志文档。
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "memory\lessons.md"
+            Content = @'
+# Lessons
+
+- 记录经过验证、值得长期保留的经验。
+'@
+        },
+        [pscustomobject]@{
+            Path = Join-Path $RepoRoot "memory\decisions.md"
+            Content = @'
+# Decisions
+
+- 记录已经做出的关键决策、原因与影响范围。
+'@
+        }
+    )
+
+    Write-Host ""
+    Write-Host "== 初始化项目文档 =="
+
+    foreach ($docItem in $docItems) {
+        Write-FileWithBackup -Path $docItem.Path -Content $docItem.Content -ForceOverwrite:$Force
+        if (-not $InstalledTargets.Contains($docItem.Path)) {
+            $InstalledTargets.Add($docItem.Path) | Out-Null
+        }
+    }
+}
+
 $UserHome = $env:USERPROFILE
 if (-not $UserHome) {
     throw "无法解析 USERPROFILE。"
@@ -190,6 +379,7 @@ $SkillDir         = Join-Path $GlobalAgentsDir "skills\harness-session"
 $SkillFile        = Join-Path $SkillDir "SKILL.md"
 $GlobalAgentsFile = Join-Path $GlobalCodexDir "AGENTS.md"
 $InstalledProjectAgentsFile = ""
+$InitializedProjectDocs = $false
 
 $SkillContent = @'
 ---
@@ -475,6 +665,15 @@ if ($ResolvedRepoRoot) {
         }
         $InstalledProjectAgentsFile = $ProjectAgentsFile
         $InstalledTargets.Add($ProjectAgentsFile) | Out-Null
+
+        $InitializeDocs = Read-YesNo -Prompt "是否初始化项目文档骨架（MISSION / plans / docs / reports / memory）？" -Default $true
+        if ($InitializeDocs) {
+            Initialize-ProjectDocuments -RepoRoot $ResolvedRepoRoot -InstalledTargets $InstalledTargets
+            $InitializedProjectDocs = $true
+        }
+        else {
+            Write-Host "[SKIP] 已跳过项目文档初始化。"
+        }
     }
     else {
         Write-Host "[SKIP] 已跳过项目安装：$ResolvedRepoRoot"
@@ -510,4 +709,10 @@ if ($InstalledProjectAgentsFile) {
     Write-Host ""
     Write-Host "填写项目模板的提示词："
     Write-Host ("codex ""请阅读当前项目并分析代码库，补全 '" + $InstalledProjectAgentsFile + "' 中 Project-Specific Section 的所有占位符，包括技术栈、重要路径、常用命令和高风险区域；直接修改文件，不要保留任何 {{...}} 模板变量。""")
+}
+
+if ($InitializedProjectDocs) {
+    Write-Host ""
+    Write-Host "补全文档内容的提示词："
+    Write-Host ("codex ""请阅读当前项目并补全文档骨架，直接修改 '" + $ResolvedRepoRoot + "' 下的 MISSION.md、plans/active/current.md、docs/README.md、docs/constraints.md、docs/system_map.md、docs/runbook.md、reports/run_log.md、memory/lessons.md、memory/decisions.md；要求内容基于代码库事实，不要保留模板占位说明。""")
 }
